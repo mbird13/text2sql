@@ -153,7 +153,10 @@ export const userValues = [
     ['aaron', 'aaron@gmail.com'],
     ['bella', 'bella@gmail.com'],
     ['carl', 'carl@gmail.com'],
-    ['doris', 'doris@gmail.com']
+    ['doris', 'doris@gmail.com'],
+    ['cc', 'c@mail.com'],
+    ['steve', 'ste@ve.com'],
+    ['mary', 'mary@gem.com']
 ];
 
 
@@ -189,6 +192,13 @@ export const movieValues = [
     ['Her', 'Romance', 2013],
     ['Alien', 'Horror', 1979],
     ['The Silence of the Lambs', 'Thriller', 1991],
-    ['Goodfellas', 'Crime', 1990]
+    ['Goodfellas', 'Crime', 1990],
+
+    ['The Lord of the Rings: The Fellowship of the Ring', 'Fantasy', 2001],
+    ['The Empire Strikes Back', 'Sci-Fi', 1980],
+    ['The Grand Budapest Hotel', 'Comedy', 2014],
+    ['The Truman Show', 'Drama', 1998],
+    ['Se7en', 'Crime', 1995]
 ];
+
 

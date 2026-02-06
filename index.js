@@ -36,7 +36,8 @@ async function init_db() {
         await db_connection.commit();
     } catch (err) {
         db_connection.rollback();
-        console.log("Error in creating tables");
+        console.log("Error in creating tables" + err);
+        throw new Error();
     }
 }
 
@@ -101,16 +102,32 @@ const strategies = {
 };
 
 async function getAIResponse(prompt) {
-  return "placeholder response";
-  const response = await client.responses.create({
-    model: "gpt-4o-nano",
+  //return "placeholder response";
+  const response = await openAIClient.responses.create({
+    model: "gpt-4o",
     input: prompt
   });
-  return response;
+  return response.output_text;
 }
 
-function sanitizeForSql(str) {
-  return str;
+function sanitizeResponse(value) {
+    const gptStartSqlMarker = "```";
+    const gptEndSqlMarker = "```";
+
+    if (value.includes(gptStartSqlMarker)) {
+        value = value.split(gptStartSqlMarker, 2)[1];
+
+        const newlineIndex = value.indexOf("\n");
+        if (newlineIndex !== -1) {
+            value = value.slice(newlineIndex + 1);
+        }
+    }
+
+    if (value.includes(gptEndSqlMarker)) {
+        value = value.split(gptEndSqlMarker, 2)[0];
+    }
+
+    return value;
 }
 
 for (const strategy in strategies) {
@@ -121,20 +138,24 @@ for (const strategy in strategies) {
   
   for (const i in  questions) {
     const sqlResponse = await getAIResponse(strategies[strategy] + questions[i]);
-    sanitizeForSql(sqlResponse);
     await fs.appendFile(currFile, '\n\nQuestion: ' + questions[i] + '\nSql Response: ' + sqlResponse+ '\n');
 
-    let data;
+    let results, fields;
     try {
-      data = await db_connection.query(sqlResponse);
+      let cleanedSql = sanitizeResponse(sqlResponse);
+      [results, fields] = await db_connection.query(cleanedSql);
     } catch (err) {
-      fs.appendFile(currFile, '\nERROR\nQuery Failed\n');
+      fs.appendFile(currFile, '\nERROR\nQuery Failed\n' + err);
       await fs.appendFile(currFile, '\n------------------------------------\n');
       continue;
     }
+    results = JSON.stringify(results);
+    await fs.appendFile(currFile, `\nQuery Response: ${results}`);
+    
+    const uninformedResponse = await getAIResponse('Given the question "' + questions[i] + '" and the raw data ' + results + 'give a friendly and concise answer to the question. Please do not give any other suggests or chatter.');
+    const finalResponse = await getAIResponse('Given the question "' + questions[i] + '" and the query ' + sqlResponse + ' which returned the raw data ' + results + 'give a friendly and concise answer to the question. Please do not give any other suggests or chatter.');
 
-    const finalResponse = await getAIResponse('Given the question "' + questions[i] + '" and the related raw data ' + data + 'give a friendly and concise answer to the question. Please do not give any other suggests or chatter.');
-
+    await fs.appendFile(currFile, '\nFirst Response: ' + uninformedResponse + '\n');
     await fs.appendFile(currFile, '\nFinal Response: ' + finalResponse);
     await fs.appendFile(currFile, '\n------------------------------------\n');
   }
