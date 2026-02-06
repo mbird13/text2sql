@@ -1,9 +1,10 @@
 import OpenAI from "openai";
 import mysql from "mysql2/promise";
+import {promises as fs} from 'fs';
+import { userValues, reviewValues, movieValues } from "./exampleValues.js";
 
 process.loadEnvFile();
 
-const client = new OpenAI();
 const db_connection = await mysql.createConnection({
     host: process.env.MYSQL_HOST,
     user: process.env.MYSQL_USER,
@@ -25,68 +26,19 @@ async function init_db() {
         const insert_sql = (table, cols) => `
             INSERT INTO ${table} (${cols})
             VALUES ?
-            `;
-        
-        const userValues = [
-                ['alice', 'alice@gmail.com'],
-                ['bob', 'bob@gmail.com'],
-                ['charlie', 'charlie@gmail.com'],
-                ['diana', 'diana@gmail.com'],
-                ['eve', 'eve@gmail.com'],
-                ['frank', 'frank@gmail.com'],
-                ['grace', 'grace@gmail.com'],
-                ['henry', 'henry@gmail.com'],
-                ['irene', 'irene@gmail.com'],
-                ['jack', 'jack@gmail.com']
-            ];
-        
+            `;    
         await db_connection.query(insert_sql('users', 'username, email'), [userValues]);
-
-        const movieValues = [
-            ['Inception', 'Sci-Fi', 2010],
-            ['The Matrix', 'Sci-Fi', 1999],
-            ['Interstellar', 'Sci-Fi', 2014],
-            ['The Godfather', 'Crime', 1972],
-            ['Pulp Fiction', 'Crime', 1994],
-            ['The Dark Knight', 'Action', 2008],
-            ['Forrest Gump', 'Drama', 1994],
-            ['Fight Club', 'Drama', 1999],
-            ['Gladiator', 'Action', 2000],
-            ['Titanic', 'Romance', 1997]
-        ];
 
         await db_connection.query(insert_sql('movies', 'title, genre, release_year'), [movieValues]);
 
-        const reviewValues = [
-            [1, 1, 5, 'Mind-blowing movie'],
-            [2, 2, 5, 'A classic'],
-            [3, 3, 4, 'Visually stunning'],
-            [4, 4, 5, 'Masterpiece'],
-            [5, 5, 4, 'Very entertaining'],
-            [6, 6, 5, 'Best Batman movie'],
-            [7, 7, 4, 'Heartwarming'],
-            [8, 8, 4, 'Intense and unique'],
-            [9, 9, 5, 'Epic action'],
-            [10, 10, 3, 'Emotional but long']
-        ];
-
         await db_connection.query(insert_sql('reviews', 'user_id, movie_id, rating, comment'), [reviewValues]);
+        
         await db_connection.commit();
     } catch (err) {
         db_connection.rollback();
         console.log("Error in creating tables");
     }
 }
-
-async function run_query(sql) {
-    return await db_connection.query(sql);
-}
-// const response = await client.responses.create({
-//     model: "gpt-4o-nano",
-//     input: "Write a one-sentence bedtime story about a unicorn."
-// });
-
-// console.log(response.output_text);
 
 const CREATE_MOVIES = `CREATE TABLE movies (
   movie_id int NOT NULL AUTO_INCREMENT,
@@ -116,6 +68,80 @@ const CREATE_REVIEWS = `CREATE TABLE reviews (
 );`
 
 await init_db();
+
+const openAIClient = new OpenAI();
+
+let questions = [
+    "Which movies have the highest average rating?",
+    "Which movies have been reviewed by multiple users?",
+    "Which users have reviewed multiple movies?",
+    "What are the top 3 most reviewed genres?",
+    "What are the titles and release years of movies that have reviews?",
+    "Which users have given more than one 5-star rating?",
+    "Which users have never written a review?",
+    "Are there any highly rated movies that only have a single review?"
+];
+
+const setupSqlScript = CREATE_MOVIES + CREATE_USERS + CREATE_REVIEWS;
+const sqlOnlyRequest = " Give me a mysql select statement that answers the following question. Only respond with mysql syntax. If there is an error do not explain it!"
+const strategies = {
+  zero_shot:  CREATE_MOVIES + CREATE_USERS + CREATE_REVIEWS + sqlOnlyRequest,
+  single_example:
+    setupSqlScript +
+    " Example Question: Which movies have recieved at least one review with a rating of 1? " +
+    " \nExample Response: SELECT DISTINCT m.title\nFROM movies m\nLEFT JOIN reviews r ON m.movie_id = r.movie_id \nWHERE r.rating = 1;\n " +
+    sqlOnlyRequest,
+  double_example:
+    setupSqlScript +
+    " Example Question: Which movies have recieved at least one review with a rating of 1? " +
+    " \nExample Response: SELECT DISTINCT m.title\nFROM movies m\nLEFT JOIN reviews r ON m.movie_id = r.movie_id \nWHERE r.rating = 1;\n " +
+    " Example Question: Which users have reviewed Inception? " +
+    " \nExample Response: SELECT u.username\nFROM users u\nLEFT JOIN reviews r ON u.user_id = r.user_id\nLEFT JOIN movies m ON r.movie_id = m.movie_id\nWHERE m.title='Inception';\n " +
+    sqlOnlyRequest
+};
+
+async function getAIResponse(prompt) {
+  return "placeholder response";
+  const response = await client.responses.create({
+    model: "gpt-4o-nano",
+    input: prompt
+  });
+  return response;
+}
+
+function sanitizeForSql(str) {
+  return str;
+}
+
+for (const strategy in strategies) {
+  
+  const currFile = 'responses/' + strategy + '.txt';
+  await fs.writeFile(currFile, 'Attempting Strategy: ' + strategy + '\n');
+  await fs.appendFile(currFile, 'Prompt Prefix: ' + strategies[strategy]);
+  
+  for (const i in  questions) {
+    const sqlResponse = await getAIResponse(strategies[strategy] + questions[i]);
+    sanitizeForSql(sqlResponse);
+    await fs.appendFile(currFile, '\n\nQuestion: ' + questions[i] + '\nSql Response: ' + sqlResponse+ '\n');
+
+    let data;
+    try {
+      data = await db_connection.query(sqlResponse);
+    } catch (err) {
+      fs.appendFile(currFile, '\nERROR\nQuery Failed\n');
+      await fs.appendFile(currFile, '\n------------------------------------\n');
+      continue;
+    }
+
+    const finalResponse = await getAIResponse('Given the question "' + questions[i] + '" and the related raw data ' + data + 'give a friendly and concise answer to the question. Please do not give any other suggests or chatter.');
+
+    await fs.appendFile(currFile, '\nFinal Response: ' + finalResponse);
+    await fs.appendFile(currFile, '\n------------------------------------\n');
+  }
+  
+}
+
+
 
 db_connection.end();
 

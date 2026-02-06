@@ -1,0 +1,96 @@
+Attempting Strategy: zero_shot
+Prompt Prefix: CREATE TABLE movies (
+  movie_id int NOT NULL AUTO_INCREMENT,
+  title varchar(150) NOT NULL,
+  genre varchar(50) DEFAULT NULL,
+  release_year int DEFAULT NULL,
+  PRIMARY KEY (movie_id)
+);CREATE TABLE users (
+  user_id int NOT NULL AUTO_INCREMENT,
+  username varchar(50) UNIQUE NOT NULL,
+  email varchar(100) UNIQUE NOT NULL,
+  PRIMARY KEY (user_id)
+);CREATE TABLE reviews (
+  review_id int NOT NULL AUTO_INCREMENT,
+  user_id int NOT NULL,
+  movie_id int NOT NULL,
+  rating int DEFAULT NULL,
+  comment text,
+  review_date datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (review_id),
+  UNIQUE (user_id,movie_id),
+  FOREIGN KEY (user_id) REFERENCES users (user_id),
+  FOREIGN KEY (movie_id) REFERENCES movies (movie_id),
+  CONSTRAINT reviews_values CHECK ((rating between 1 and 5))
+); Give me a mysql select statement that answers the following question. Only respond with mysql syntax. If there is an error do not explain it!
+
+Question: Which movies have the highest average rating?
+Sql Response: placeholder response
+
+------------------------------------
+
+ERROR
+Query Failed
+
+
+Question: Which movies have been reviewed by multiple users?
+Sql Response: placeholder response
+
+ERROR
+Query Failed
+
+------------------------------------
+
+
+Question: Which users have reviewed multiple movies?
+Sql Response: placeholder response
+
+ERROR
+Query Failed
+
+------------------------------------
+
+
+Question: What are the top 3 most reviewed genres?
+Sql Response: placeholder response
+
+ERROR
+Query Failed
+
+------------------------------------
+
+
+Question: What are the titles and release years of movies that have reviews?
+Sql Response: placeholder response
+
+ERROR
+Query Failed
+
+------------------------------------
+
+
+Question: Which users have given more than one 5-star rating?
+Sql Response: placeholder response
+
+ERROR
+Query Failed
+
+------------------------------------
+
+
+Question: Which users have never written a review?
+Sql Response: placeholder response
+
+------------------------------------
+
+ERROR
+Query Failed
+
+
+Question: Are there any highly rated movies that only have a single review?
+Sql Response: placeholder response
+
+ERROR
+Query Failed
+
+------------------------------------
